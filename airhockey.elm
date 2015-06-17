@@ -244,7 +244,7 @@ txt f string =
     |> f
     |> leftAligned
 
-msg = "SPACE to start, WS and &uarr;&darr; to move"
+msg = "SPACE to start, move paddle with mouse"
 
 viewBB obj color =
   let shape = case obj.shape of
