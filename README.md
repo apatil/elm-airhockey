@@ -7,3 +7,6 @@ To play:
 - elm-package install
 - elm-reactor
 - Point browser to localhost:8000
+
+Limitations:
+- Player 2 doesn't move yet. :)
