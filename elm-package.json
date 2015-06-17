@@ -1,0 +1,17 @@
+{
+    "version": "1.0.0",
+    "summary": "Air hockey",
+    "repository": "https://github.com/apatil/elm-airhockey.git",
+    "license": "BSD3",
+    "source-directories": [
+        "."
+    ],
+    "exposed-modules": [],
+    "dependencies": {
+        "elm-lang/core": "2.1.0 <= v < 3.0.0",
+        "evancz/elm-html": "3.0.0 <= v < 4.0.0",
+        "evancz/start-app": "1.0.0 <= v < 2.0.0",
+        "jastice/boxes-and-bubbles": "1.0.1 <= v < 2.0.0"
+    },
+    "elm-version": "0.15.0 <= v < 0.16.0"
+}
