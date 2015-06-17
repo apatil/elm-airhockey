@@ -3680,10 +3680,10 @@ Elm.Main.make = function (_elm) {
                            ,_0: $Basics.toFloat(_v0._0) - $Basics.toFloat(_v1._0) / 2
                            ,_1: $Basics.toFloat(_v1._1) / 2 - $Basics.toFloat(_v0._1)};}
                  _U.badCase($moduleName,
-                 "on line 279, column 4 to 56");
+                 "on line 277, column 4 to 56");
               }();}
          _U.badCase($moduleName,
-         "on line 279, column 4 to 56");
+         "on line 277, column 4 to 56");
       }();
    });
    var dt = A2($Signal.map,
@@ -3707,7 +3707,7 @@ Elm.Main.make = function (_elm) {
                  _v8._0 * 2,
                  _v8._0 * 2);}
             _U.badCase($moduleName,
-            "between lines 252 and 255");
+            "between lines 250 and 253");
          }();
          return $Graphics$Collage.move(obj.pos)($Graphics$Collage.filled(color)(shape));
       }();
@@ -3752,7 +3752,7 @@ Elm.Main.make = function (_elm) {
                  }();
               }();}
          _U.badCase($moduleName,
-         "between lines 153 and 161");
+         "between lines 151 and 159");
       }();
    });
    var diff2 = F2(function (_v17,
@@ -3767,10 +3767,10 @@ Elm.Main.make = function (_elm) {
                            ,_0: _v17._0 - _v18._0
                            ,_1: _v17._1 - _v18._1};}
                  _U.badCase($moduleName,
-                 "on line 150, column 22 to 30");
+                 "on line 148, column 22 to 30");
               }();}
          _U.badCase($moduleName,
-         "on line 150, column 22 to 30");
+         "on line 148, column 22 to 30");
       }();
    });
    var scale2 = F2(function (s,
@@ -3782,7 +3782,7 @@ Elm.Main.make = function (_elm) {
                    ,_0: s * _v25._0
                    ,_1: s * _v25._1};}
          _U.badCase($moduleName,
-         "on line 149, column 19 to 31");
+         "on line 147, column 19 to 31");
       }();
    });
    var Input = F4(function (a,
@@ -3859,7 +3859,7 @@ Elm.Main.make = function (_elm) {
             case "Nothing":
             return defaultPuck;}
          _U.badCase($moduleName,
-         "between lines 166 and 170");
+         "between lines 164 and 168");
       }();
    });
    var paddleSize = 30.0;
@@ -3895,7 +3895,7 @@ Elm.Main.make = function (_elm) {
             return _U.cmp($Basics.fst(puck.pos),
               halfWidth) > 0;}
          _U.badCase($moduleName,
-         "between lines 106 and 108");
+         "between lines 104 and 106");
       }();
    });
    var defaultPaddle = function (side) {
@@ -3914,7 +3914,7 @@ Elm.Main.make = function (_elm) {
               ,_1: 0},
               {ctor: "_Tuple2",_0: 0,_1: 0});}
          _U.badCase($moduleName,
-         "between lines 65 and 67");
+         "between lines 63 and 65");
       }();
    };
    var newPlayer = function (side) {
@@ -4013,7 +4013,7 @@ Elm.Main.make = function (_elm) {
                  gameWidth / 2 - size,
                  $Basics.fst(pos));}
             _U.badCase($moduleName,
-            "between lines 176 and 180");
+            "between lines 174 and 178");
          }();
          return {ctor: "_Tuple2"
                 ,_0: x
@@ -4163,7 +4163,7 @@ Elm.Main.make = function (_elm) {
                                  msg)))])));
                  }();}
             _U.badCase($moduleName,
-            "between lines 205 and 228");
+            "between lines 203 and 226");
          }();
       }();
    });

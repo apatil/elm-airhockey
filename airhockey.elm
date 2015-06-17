@@ -11,10 +11,8 @@ import Text
 import Time exposing (Time, inSeconds, fps)
 import Window
 import Mouse
-import Maybe
 import Debug
-import Maybe
-import Signal exposing ((<~), (~))
+import Signal as S exposing ((<~), (~))
 
 
 -- Config
