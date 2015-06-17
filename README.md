@@ -6,7 +6,7 @@ To play:
 - git clone
 - elm-package install
 - elm-reactor
-- Point browser to localhost:8000
+- Point browser to localhost:8000/airhockey.elm
 
 Limitations:
 - Player 2 doesn't move yet. :)
