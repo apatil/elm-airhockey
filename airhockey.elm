@@ -1,5 +1,3 @@
- -- See this document for more information on making Pong:
--- http://elm-lang.org/blog/pong
 import Color exposing (rgb, white, black)
 import Graphics.Collage exposing (collage, oval, rect, filled, toForm, move)
 import Graphics.Element exposing (container, middle, Element, spacer, leftAligned)
@@ -12,27 +10,60 @@ import Time exposing (Time, inSeconds, fps)
 import Window
 import Mouse
 import Debug
+import Random
 import Signal as S exposing ((<~), (~))
-
 
 -- Config
 
-(gameWidth,gameHeight) = (600.0,400.0)
-goalHeight = 100.0
-paddleSize = 30.0
-puckSize = 20.0
--- Make this huge to prevent the puck from going through the bounds.
-boundsWidth = 10000.0
-maxVelocity = 20.0
+newGame : Game
+newGame = resetBodies Right {
+    state = Pause
+  , leftPlayer = {side=Left, control=Automatic goalie, score=0}
+  , rightPlayer = {side=Right, control=Manual, score=0}
+  , width = 1200.0
+  , height = 800.0
+  , goalHeight = 100.0
+  , paddleSize = 30.0
+  , puckSize = 20.0
+  , puckDensity = 10.0
+  , maxPuckVelocity = 1000.0
+  , maxAutoPlayerVelocity = 200.0
+  , e0 = 0.8
+  , bodies = {
+      leftPlayer = placeholderBody,
+      rightPlayer = placeholderBody,
+      puck = placeholderBody
+    }
+  }
 
--- Model
 
-(halfWidth, halfHeight) = (gameWidth / 2, gameHeight / 2)
-halfGoal = goalHeight / 2
-inf = 1/0
+-- Computer player strategies (none very good so far)
 
--- Default restitution coefficient
-e0 = 0.8
+wall : Strategy
+wall dt game side player opponent puck =
+  let (x,y) = puck.pos
+  in
+    case side of
+      Left -> (-game.width / 3, y)
+      Right -> (game.width / 3, y)
+      _ -> (0, y)
+
+follower : Strategy
+follower dt game side player opponent puck =
+  puck.pos
+
+goalie: Strategy
+goalie dt game side player opponent puck =
+  let
+    rTarg = 200.0
+    goalCtr = (-game.width/2, 0)
+    (x,y) = diff2 puck.pos goalCtr
+    scale = sqrt <| (rTarg * rTarg /(x*x + y*y))
+  in
+    axpy2 scale (x,y) goalCtr
+
+
+-- Air hockey type defs
 
 type State = Play | Pause
 type Side = Left | Right | Neither
@@ -42,187 +73,224 @@ type alias Vec2 = (Float, Float)
 type alias Player =
   -- Record the last two timesteps of the player's paddle for
   -- easy computation of velocity.
-  { paddle: {current: BBB.Body {}, last: BBB.Body {}}, score: Int }
+  {score: Int, control: Control, side: Side }
 
 type alias Game =
   { state : State
-  , puck : BBB.Body {}
-  , player1 : Player
-  , player2 : Player
+  , leftPlayer : Player
+  , rightPlayer : Player
+  , width : Float
+  , height : Float
+  , goalHeight : Float
+  , paddleSize : Float
+  , puckSize : Float
+  , puckDensity: Float
+  , maxPuckVelocity : Float
+  , maxAutoPlayerVelocity : Float
+  , e0 : Float
+  , bodies : {
+      leftPlayer : BBB.Body {},
+      rightPlayer : BBB.Body {},
+      puck : BBB.Body {}
+    }
   }
 
 type alias Input =
-  { space : Bool
-  , pos1 : Vec2
-  , pos2 : Vec2
+  {
+    space : Bool
+  , pos : Vec2
   , dt : Time
   }
 
-getPaddle pos v = BB.bubble paddleSize inf e0 pos v
-defaultPaddle side =
-  case side of
-    Left -> getPaddle (-gameWidth / 4,0) (0,0)
-    Right -> getPaddle (gameWidth/4,0) (0,0)
-newPlayer : Side -> Player
-newPlayer side =
-  {paddle={current=defaultPaddle side, last=defaultPaddle side}, score=0}
-newPlayer1 = newPlayer Left
-newPlayer2 = newPlayer Right
+type alias Strategy = Float -> Game -> Side -> BBB.Body {} -> BBB.Body {} -> BBB.Body {} -> (Float, Float)
 
-boundBox = {velocity=(0,0), inverseMass=0,restitution=e0, pos=(0,0), shape=BBB.Box (0,0)}
+type Control = Automatic Strategy | Manual
+
+
+-- Model
+
+placeholderBody = BB.bubble 0 0 0 (0,0) (0,0)
+
+defaultPaddle : Side -> Game -> (Float, Float)
+defaultPaddle side game =
+  case side of
+    Left -> (-game.width / 3, 0)
+    Right ->(game.width / 3, 0)
+
+defaultPuck : Side -> Game -> (Float, Float)
+defaultPuck side game =
+  case side of
+    Left -> (-game.width / 6, 0)
+    Right -> (game.width / 6, 0)
+
+resetBodies : Side -> Game -> Game
+resetBodies puckSide game =
+  let
+    leftPlayerPos = defaultPaddle game.leftPlayer.side game
+    rightPlayerPos = defaultPaddle game.rightPlayer.side game
+    puckPos = defaultPuck puckSide game
+    bodies = {
+      leftPlayer=BB.bubble game.paddleSize inf game.e0 leftPlayerPos (0,0),
+      rightPlayer=BB.bubble game.paddleSize inf game.e0 rightPlayerPos (0,0),
+      puck=BB.bubble game.puckSize game.puckDensity game.e0 puckPos (0,0)
+    }
+  in
+    {game | bodies <- bodies}
+
+-- Non-configurable constants
+inf = 1/0
+boundsWidth = 10000.0
+
+scale2 s (x,y) = (s * x, s * y)
+diff2 (x,y) (z,w) = (x-z, y-w)
+add2 (x,y) (z,w) = (x+z, y+w)
+axpy2 : Float -> (Float, Float) -> (Float, Float) -> (Float, Float)
+axpy2 a (x,y) (z,w) = (a*x + z, a*y + w)
+
+boundBox = {velocity=(0,0), inverseMass=0,restitution=newGame.e0, pos=(0,0), shape=BBB.Box (0,0)}
+bounds : List (BBB.Body {})
 bounds = [
     -- top
-    { boundBox | pos <- (0, (gameHeight + boundsWidth*2)/2), shape <- BBB.Box (gameWidth + boundsWidth, boundsWidth) },
+    { boundBox | pos <- (0, (newGame.height + boundsWidth*2)/2), shape <- BBB.Box (newGame.width + boundsWidth, boundsWidth) },
     -- bottom
-    { boundBox | pos <- (0, -(gameHeight + boundsWidth*2)/2), shape <- BBB.Box (gameWidth + boundsWidth, boundsWidth) }
+    { boundBox | pos <- (0, -(newGame.height + boundsWidth*2)/2), shape <- BBB.Box (newGame.width + boundsWidth, boundsWidth) }
   ]
   -- left
   ++ [
     -- Above goal
-    { boundBox | pos <- (-(gameWidth + boundsWidth*2)/2, (gameHeight + goalHeight) / 4), shape <- BBB.Box (boundsWidth, (gameHeight - goalHeight) / 4) },
+    { boundBox | pos <- (-(newGame.width + boundsWidth*2)/2, (newGame.height + newGame.goalHeight) / 4), shape <- BBB.Box (boundsWidth, (newGame.height - newGame.goalHeight) / 4) },
     -- Below goal
-    { boundBox | pos <- (-(gameWidth + boundsWidth*2)/2, -(goalHeight + gameHeight) / 4), shape <- BBB.Box (boundsWidth, (gameHeight - goalHeight) / 4) }
+    { boundBox | pos <- (-(newGame.width + boundsWidth*2)/2, -(newGame.goalHeight + newGame.height) / 4), shape <- BBB.Box (boundsWidth, (newGame.height - newGame.goalHeight) / 4) }
   ]
   -- right
   ++ [
     -- Above goal
-    { boundBox | pos <- ((gameWidth + boundsWidth*2)/2, (gameHeight + goalHeight) / 4), shape <- BBB.Box (boundsWidth, (gameHeight - goalHeight) / 4) },
+    { boundBox | pos <- ((newGame.width + boundsWidth*2)/2, (newGame.height + newGame.goalHeight) / 4), shape <- BBB.Box (boundsWidth, (newGame.height - newGame.goalHeight) / 4) },
     -- Below goal
-    { boundBox | pos <- ((gameWidth + boundsWidth*2)/2, -(goalHeight + gameHeight) / 4), shape <- BBB.Box (boundsWidth, (gameHeight - goalHeight) / 4) }
+    { boundBox | pos <- ((newGame.width + boundsWidth*2)/2, -(newGame.goalHeight + newGame.height) / 4), shape <- BBB.Box (boundsWidth, (newGame.height - newGame.goalHeight) / 4) }
   ]
 
-defaultPuck = BB.bubble puckSize 10 e0 (0,0) (0,0)
-defaultGame : Game
-defaultGame =
-  { state = Pause
-  , puck =  defaultPuck
-  , player1 = newPlayer Left
-  , player2 = newPlayer Right
-  }
+inGoal : Game -> Side
+inGoal game =
+  if
+    | (fst game.bodies.puck.pos) < -game.width / 2 -> Left
+    | (fst game.bodies.puck.pos) > game.width / 2 -> Right
+    | otherwise -> Neither
 
-inGoal puck side =
-  case side of
-    Left -> (fst puck.pos) < -halfWidth
-    Right -> (fst puck.pos) > halfWidth
+incrementScore : Player -> Player
+incrementScore player = {player | score <- player.score + 1}
 
-update : Input -> Game -> Game
-update {space,pos1,pos2,dt} ({state,puck,player1,player2} as game) =
+capVelocity : Float -> BBB.Body {} -> BBB.Body {}
+capVelocity maxV body =
+  -- Make sure neither players nor puck leave the rink or exceed their speed limits.
   let
-    score1 =
-      if inGoal puck Right then 1 else 0
-
-    score2 =
-      if inGoal puck Left then 1 else 0
-
-    newState =
-      if
-        | space -> Play
-        --| score1 /= score2 -> Pause
-        | otherwise -> state
-
-    newPlayer1 = case state of
-      Pause -> player1
-      _ -> updatePlayer dt Right pos1 player1
-
-    newPlayer2 = case state of
-      Pause -> player2
-      _ -> updatePlayer dt Left pos2 player2
-
-    blarg = Debug.watch "hi" {score1=score1, score2=score2, puck=puck}
-
-    newPuck =
-      --puck
-      if
-        | score1 /= score2 -> defaultPuck
-        | state == Pause -> puck
-        | otherwise -> updatePuck dt puck ([newPlayer1.paddle.current, newPlayer2.paddle.current] ++ bounds)
-  in
-    {
-      state = newState,
-      puck = newPuck,
-      player1 = {newPlayer1 | score <- player1.score + score1},
-      player2 = {newPlayer2 | score <- player2.score + score2}
-    }
-
-scale2 s (x,y) = (s * x, s * y)
-diff2 (x,y) (z,w) = (x-z, y-w)
-
-capVelocity maxV (vx, vy) =
-  let 
+    (vx, vy) = body.velocity
     absV2 = (vx * vx) + (vy * vy)
     maxV2 = maxV * maxV
   in
-    if 
-      | maxV2 > absV2 -> (vx, vy)
-      | otherwise -> let scale = sqrt (maxV2 / absV2)
+    if
+      | maxV2 > absV2 -> body
+      | otherwise -> let
+          scale = sqrt (maxV2 / absV2)
         in
-          (vx * scale, vy * scale)
+          {body | velocity <- (vx * scale, vy * scale)}
 
+clampInGame : Side -> Game -> BBB.Body {} -> BBB.Body {}
+clampInGame side game body =
+  -- Make sure an object doesn't penetrate the walls or go out of bounds.
+  case body.shape of
+    BBB.Bubble size -> let
+        x = case side of
+          Left -> clamp (-game.width / 2 + size) -size (fst body.pos)
+          Right -> clamp size (game.width / 2 - size) (fst body.pos)
+          Neither -> clamp (-game.width / 2 + size) (game.width / 2 - size) (fst body.pos)
+        y = clamp (-game.height / 2 + size) (game.height / 2 - size) (snd body.pos)
+      in
+        {body | pos <- (x, y)}
+    -- This case is not supported right now.
+    BBB.Box (w,h) -> body
 
-updatePuck : Time -> BBB.Body {} -> List (BBB.Body {}) -> BBB.Body {}
-updatePuck dt puck bodies =
-  case List.head <| BBE.collideWith puck bodies [] of
-    Just newPuck -> 
-      BBE.update (0,0) (0,0) {newPuck | velocity <- capVelocity maxVelocity newPuck.velocity}
+updatePuck : Input -> Game -> BBB.Body {}
+updatePuck input game =
+  case List.head <| BBE.collideWith game.bodies.puck ([game.bodies.leftPlayer, game.bodies.rightPlayer] ++ bounds) [] of
+    Just newPuck -> let
+        capped = capVelocity game.maxPuckVelocity newPuck
+        newPos = axpy2 input.dt capped.velocity capped.pos
+        updated = {capped | pos <- newPos, velocity <- capped.velocity}
+      in
+        updated
     -- This should never happen, but let's be thorough.
-    Nothing -> defaultPuck
+    Nothing -> game.bodies.puck
 
-clampInGame : Side -> Float -> (Float, Float) -> (Float, Float)
-clampInGame side size pos =
-  -- Make sure the paddle doesn't penetrate the walls or go out of bounds.
+updatePlayer : Input -> Side -> Game -> BBB.Body {}
+updatePlayer input side game =
   let
-    x = case side of
-      Left -> clamp (-gameWidth / 2 + size) -size (fst pos)
-      Right -> clamp size (gameWidth / 2 - size) (fst pos)
-      Neither -> clamp (-gameWidth / 2 + size) (gameWidth / 2 - size) (fst pos)
-    y = clamp (-gameHeight / 2 + size) (gameHeight / 2 - size) (snd pos) 
+    bodies = game.bodies
+    (lastPlayer, opponent, control) = case side of
+      Left -> (bodies.leftPlayer, bodies.rightPlayer, game.leftPlayer.control)
+      Right -> (bodies.rightPlayer, bodies.rightPlayer, game.rightPlayer.control)
   in
-    (x, y)
-    --pos
+    case control of
+       Manual -> clampInGame side game <| updatePlayerPosition lastPlayer input.dt input.pos
+       Automatic strategy ->
+         let
+           attemptedPos = strategy input.dt game side lastPlayer opponent bodies.puck
+           player = updatePlayerPosition lastPlayer input.dt attemptedPos
+           capped = capVelocity game.maxAutoPlayerVelocity player
+           newPos = axpy2 input.dt capped.velocity lastPlayer.pos
+         in
+           clampInGame side game  {player | pos <- newPos, velocity <- capped.velocity}
 
-updatePlayer : Time -> Side -> (Float, Float) -> Player -> Player
-updatePlayer dt side pos player =
+updatePlayerPosition : BBB.Body {} -> Float ->  (Float, Float) -> BBB.Body {}
+updatePlayerPosition lastPlayer dt pos =
+  {lastPlayer | pos <- pos, velocity <- scale2 (1 / dt) <| diff2 pos lastPlayer.pos}
+
+updateBodies : Input -> Game -> Game
+updateBodies input game =
   let
-    current = player.paddle.current
-    last = player.paddle.last
-    currentPos = clampInGame side paddleSize pos
-    paddle = {
-      last=current,
-      current={ current |
-        pos <- currentPos,
-        velocity <- scale2 (1 / dt) <| diff2 current.pos last.pos
-      }
-    }
+    newLP = updatePlayer input Left game
+    newRP = updatePlayer input Right game
+    newPuck = updatePuck input game
   in
-  { player | paddle <- paddle }
+    {game | bodies <- {puck=newPuck, leftPlayer=newLP, rightPlayer=newRP}}
+
+update : Input -> Game -> Game
+update input game =
+  case inGoal game of
+    Left -> resetBodies Left {game | rightPlayer <- incrementScore game.rightPlayer}
+    Right -> resetBodies Right {game | leftPlayer <- incrementScore game.leftPlayer}
+    otherwise ->
+      case game.state of
+        Pause -> if input.space then {game | state <- Play} else game
+        Play -> updateBodies input game
 
 -- View
 
 view : (Int,Int) -> Game -> Element
-view (w,h) {state,puck,player1,player2} =
+view (w,h) {state,width,height,goalHeight,leftPlayer,rightPlayer,bodies} =
   let
     scores =
-      txt (Text.height 50) (toString player1.score ++ "  " ++ toString player2.score)
+      txt (Text.height 50) (toString leftPlayer.score ++ "  " ++ toString rightPlayer.score)
   in
     container w h middle <|
-    collage (floor gameWidth) (floor gameHeight)
-      [ rect gameWidth gameHeight
+    collage (floor width) (floor height)
+      [ rect width height
           |> filled rinkBlue
-        , rect 5 gameHeight 
+        , rect 5 height
           |> filled textBlue
         , rect 5 goalHeight
           |> filled goalRed
-          |> move (2.5 - gameWidth/2, 0)
+          |> move (2.5 - width/2, 0)
         , rect 5 goalHeight
           |> filled goalRed
-          |> move (gameWidth/2 - 2.5, 0)
-        , viewBB puck puckYellow
-        , viewBB player1.paddle.current white
-        , viewBB player2.paddle.current white
+          |> move (width/2 - 2.5, 0)
+        , viewBB bodies.puck puckYellow
+        , viewBB bodies.leftPlayer white
+        , viewBB bodies.rightPlayer white
         , toForm scores
-            |> move (0, gameHeight/2 - 40)
+            |> move (0, height/2 - 40)
         , toForm (if state == Play then spacer 1 1 else txt identity msg)
-            |> move (0, 40 - gameHeight/2)
+            |> move (0, 40 - height/2)
         ]
 
 rinkBlue =
@@ -257,33 +325,24 @@ viewBB obj color =
 
 -- SIGNALS
 
+dt =
+  Signal.map inSeconds (fps 45)
+
 input : Signal Input
 input =
   Signal.sampleOn dt <|
-    Signal.map4 Input
+    Signal.map3 Input
       Keyboard.space
       (mouseToPos <~ Mouse.position ~ Window.dimensions)
-      (Signal.constant (-gameWidth/4, 0.0))
       dt
 
 gameState : Signal Game
 gameState =
-  Signal.foldp update defaultGame input
+  Signal.foldp update newGame input
 
-dt =
-  Signal.map inSeconds (fps 45)
 
 mouseToPos (x,y) (w,h) =
   (toFloat x - toFloat w / 2, toFloat h / 2 - toFloat y)
-
--- FIXME: Mouse position is at (0,0) in upper left corner and like (1400, 800)
--- in lower right. How to relate to intended position of paddle?
-
--- FIXME: The x and y coordinate of the moving player's paddle are the same right now.
-
--- FIXME: Players should not be able to move before space bar is pressed.
-
--- FIXME: The non-moving player starts way off center.
 
 main =
   Signal.map2 view Window.dimensions gameState
